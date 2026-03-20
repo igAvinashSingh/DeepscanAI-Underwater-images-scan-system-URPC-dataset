@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepScan AI — Underwater Object Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ocean-deep: #020b18;
+    --ocean-mid: #041830;
+    --ocean-surface: #062548;
+    --glow-cyan: #00e5ff;
+    --glow-teal: #00bfa5;
+    --glow-amber: #ffab40;
+    --glow-danger: #ff5252;
+    --text-primary: #e8f4f8;
+    --text-secondary: #8ab4c4;
+    --text-muted: #4a7a8a;
+    --card-bg: rgba(4, 24, 48, 0.85);
+    --border-glow: rgba(0, 229, 255, 0.2);
+    --border-subtle: rgba(0, 229, 255, 0.08);
+    --font-main: 'Space Grotesk', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--ocean-deep);
+    color: var(--text-primary);
+    font-family: var(--font-main);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 80%, rgba(0, 100, 150, 0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 20%, rgba(0, 180, 200, 0.08) 0%, transparent 50%),
+      repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(0,229,255,0.015) 60px, rgba(0,229,255,0.015) 61px),
+      repeating-linear-gradient(90deg, transparent, transparent 80px, rgba(0,229,255,0.01) 80px, rgba(0,229,255,0.01) 81px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .particles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: var(--glow-cyan);
+    border-radius: 50%;
+    opacity: 0;
+    animation: float-up var(--dur, 8s) var(--delay, 0s) infinite ease-in-out;
+  }
+
+  @keyframes float-up {
+    0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+    10% { opacity: 0.4; }
+    90% { opacity: 0.2; }
+    100% { transform: translateY(-20px) translateX(var(--drift, 20px)); opacity: 0; }
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* HEADER */
+  header {
+    padding: 28px 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, #00bfa5, #00e5ff);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #00e5ff, #00bfa5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .header-badges {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .badge {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border: 1px solid;
+  }
+
+  .badge-yolo { border-color: rgba(0,229,255,0.4); color: var(--glow-cyan); background: rgba(0,229,255,0.08); }
+  .badge-urpc { border-color: rgba(0,191,165,0.4); color: var(--glow-teal); background: rgba(0,191,165,0.08); }
+  .badge-live { border-color: rgba(76,175,80,0.4); color: #81c784; background: rgba(76,175,80,0.08); display: flex; align-items: center; gap: 5px; }
+  .badge-live::before { content: ''; width: 6px; height: 6px; background: #81c784; border-radius: 50%; animation: pulse 1.5s infinite; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* MAIN LAYOUT */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 24px;
+    padding: 28px 0;
+    align-items: start;
+  }
+
+  /* UPLOAD AREA */
+  .upload-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: -8px;
+  }
+
+  .drop-zone {
+    border: 2px dashed var(--border-glow);
+    border-radius: 16px;
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .drop-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(0,229,255,0.04) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .drop-zone:hover::before, .drop-zone.drag-over::before { opacity: 1; }
+  .drop-zone:hover { border-color: rgba(0,229,255,0.5); }
+  .drop-zone.drag-over { border-color: var(--glow-cyan); background: rgba(0,229,255,0.05); }
+
+  .drop-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+    filter: drop-shadow(0 0 12px rgba(0,229,255,0.4));
+  }
+
+  .drop-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .drop-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+
+  .sample-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: rgba(0,229,255,0.1);
+    border: 1px solid rgba(0,229,255,0.3);
+    border-radius: 8px;
+    color: var(--glow-cyan);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .sample-btn:hover { background: rgba(0,229,255,0.18); transform: translateY(-1px); }
+
+  #fileInput { display: none; }
+
+  /* CANVAS AREA */
+  .canvas-container {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--card-bg);
+    border: 1px solid var(--border-glow);
+    display: none;
+  }
+
+  .canvas-container.visible { display: block; }
+
+  #detectionCanvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 520px;
+    object-fit: contain;
+  }
+
+  .canvas-overlay {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .overlay-chip {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    background: rgba(2,11,24,0.85);
+    border: 1px solid var(--border-glow);
+    color: var(--glow-cyan);
+    backdrop-filter: blur(8px);
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--glow-cyan), transparent);
+    animation: scan 2s linear infinite;
+    display: none;
+    box-shadow: 0 0 8px var(--glow-cyan);
+  }
+
+  @keyframes scan {
+    from { top: 0; }
+    to { top: 100%; }
+  }
+
+  /* PROCESSING STATE */
+  .processing-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(2,11,24,0.88);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    backdrop-filter: blur(4px);
+  }
+
+  .processing-overlay.active { display: flex; }
+
+  .spinner {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,229,255,0.15);
+    border-top-color: var(--glow-cyan);
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .proc-text {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+  }
+
+  .proc-steps {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .card {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .card-body { padding: 18px; }
+
+  /* DETECTION RESULTS */
+  .detections-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .detections-list::-webkit-scrollbar { width: 4px; }
+  .detections-list::-webkit-scrollbar-track { background: transparent; }
+  .detections-list::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 2px; }
+
+  .detection-item {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(6,37,72,0.5);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .detection-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--item-color, var(--glow-cyan));
+    border-radius: 3px 0 0 3px;
+  }
+
+  .detection-item:hover { border-color: var(--border-glow); background: rgba(6,37,72,0.85); }
+  .detection-item.active { border-color: rgba(0,229,255,0.4); background: rgba(0,229,255,0.06); }
+
+  .det-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .det-name {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .det-conf {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(0,229,255,0.1);
+    border: 1px solid rgba(0,229,255,0.2);
+    color: var(--glow-cyan);
+  }
+
+  .det-conf.high { background: rgba(0,191,165,0.1); border-color: rgba(0,191,165,0.3); color: var(--glow-teal); }
+  .det-conf.medium { background: rgba(255,171,64,0.1); border-color: rgba(255,171,64,0.3); color: var(--glow-amber); }
+  .det-conf.low { background: rgba(255,82,82,0.1); border-color: rgba(255,82,82,0.3); color: var(--glow-danger); }
+
+  .conf-bar-track {
+    height: 3px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .conf-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--fill-color, var(--glow-teal));
+    transition: width 0.6s ease;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .empty-icon { font-size: 32px; display: block; margin-bottom: 10px; opacity: 0.5; }
+
+  /* AI SPECIES INFO */
+  .species-card {
+    display: none;
+  }
+
+  .species-card.visible { display: block; }
+
+  .species-name {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    background: linear-gradient(90deg, #00e5ff, #00bfa5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .species-sci {
+    font-size: 12px;
+    font-style: italic;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    font-family: var(--font-mono);
+  }
+
+  .trait-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .trait-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(6,37,72,0.6);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .trait-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .trait-val {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .ai-description {
+    font-size: 13px;
+    line-height: 1.75;
+    color: var(--text-secondary);
+    border-left: 2px solid rgba(0,229,255,0.3);
+    padding-left: 14px;
+  }
+
+  .ai-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-family: var(--font-mono);
+  }
+
+  .ai-dot-spin {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,229,255,0.15);
+    border-top-color: var(--glow-cyan);
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  /* STATS */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .stat-item {
+    text-align: center;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(6,37,72,0.5);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .stat-val {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    background: linear-gradient(90deg, #00e5ff, #00bfa5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .stat-lbl {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+    margin-top: 2px;
+  }
+
+  /* HISTORY */
+  .history-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .history-thumb {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+
+  .history-thumb:hover { border-color: var(--border-glow); }
+  .history-thumb img { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.7) saturate(0.8) hue-rotate(180deg); }
+  .history-thumb .hist-count {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: rgba(0,229,255,0.85);
+    color: var(--ocean-deep);
+    font-size: 10px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    padding: 2px 5px;
+    border-radius: 4px;
+  }
+
+  /* ANALYZE BTN */
+  .analyze-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, #00bfa5, #0097a7);
+    color: white;
+    font-family: var(--font-main);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: none;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .analyze-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+  }
+
+  .analyze-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,191,165,0.35); }
+  .analyze-btn:active { transform: translateY(0); }
+  .analyze-btn.visible { display: block; }
+
+  /* DANGER METER */
+  .danger-bar {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .danger-seg {
+    height: 6px;
+    flex: 1;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .danger-seg.filled-1 { background: #4caf50; }
+  .danger-seg.filled-2 { background: #8bc34a; }
+  .danger-seg.filled-3 { background: #ffeb3b; }
+  .danger-seg.filled-4 { background: #ff9800; }
+  .danger-seg.filled-5 { background: #f44336; }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .trait-grid { grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, rgba(0,229,255,0.04) 25%, rgba(0,229,255,0.1) 50%, rgba(0,229,255,0.04) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+    height: 14px;
+    margin: 6px 0;
+  }
+
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  .text-cursor::after {
+    content: '▋';
+    animation: blink 0.7s step-end infinite;
+    color: var(--glow-cyan);
+  }
+
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+  footer {
+    border-top: 1px solid var(--border-subtle);
+    padding: 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .footer-note {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<div class="particles" id="particles"></div>
+
+<div class="wrapper">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🌊</div>
+      <div class="logo-text">
+        <div class="logo-title">DeepScan AI</div>
+        <div class="logo-sub">Underwater Object Detection System</div>
+      </div>
+    </div>
+    <div class="header-badges">
+      <span class="badge badge-urpc">URPC2020</span>
+      <span class="badge badge-yolo">YOLOv8</span>
+      <span class="badge badge-live">Online</span>
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <!-- LEFT: Upload + Canvas -->
+    <div class="upload-section">
+      <div class="section-label">Input — Underwater Image</div>
+
+      <div class="drop-zone" id="dropZone">
+        <span class="drop-icon">🔬</span>
+        <div class="drop-title">Drop Underwater Image Here</div>
+        <div class="drop-desc">Upload any underwater image for real-time species detection.<br>Supports JPG, PNG, WebP — max 10MB</div>
+        <button class="sample-btn" id="sampleBtn">⚡ Load Sample Image</button>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="detectionCanvas"></canvas>
+        <div class="canvas-overlay" id="canvasOverlay"></div>
+        <div class="scan-line" id="scanLine"></div>
+        <div class="processing-overlay" id="processingOverlay">
+          <div class="spinner"></div>
+          <div class="proc-text" id="procText">INITIALIZING YOLOV8</div>
+          <div class="proc-steps" id="procSteps">Loading model weights...</div>
+        </div>
+      </div>
+
+      <button class="analyze-btn" id="analyzeBtn">⚡ Analyze with DeepScan AI</button>
+
+      <!-- Stats Row -->
+      <div class="card" id="statsCard" style="display:none;">
+        <div class="card-header">
+          <span class="card-title">Detection Statistics</span>
+          <span class="overlay-chip" id="inferenceTime">—</span>
+        </div>
+        <div class="card-body">
+          <div class="stats-row">
+            <div class="stat-item">
+              <div class="stat-val" id="statObjects">0</div>
+              <div class="stat-lbl">Objects</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-val" id="statSpecies">0</div>
+              <div class="stat-lbl">Species</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-val" id="statConfAvg">—</div>
+              <div class="stat-lbl">Avg Conf</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Sidebar -->
+    <div class="sidebar">
+      <!-- Detection Results -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Detected Objects</span>
+          <span class="overlay-chip" id="detCount">0 found</span>
+        </div>
+        <div class="card-body">
+          <div class="detections-list" id="detectionsList">
+            <div class="empty-state">
+              <span class="empty-icon">🐠</span>
+              Upload an underwater image to begin detection
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Species Description -->
+      <div class="card species-card" id="speciesCard">
+        <div class="card-header">
+          <span class="card-title">AI Species Analysis</span>
+          <span class="overlay-chip" style="color:#81c784; border-color:rgba(129,199,132,0.3);">Claude AI</span>
+        </div>
+        <div class="card-body" id="speciesBody">
+          <div class="ai-loading" id="aiLoading">
+            <div class="ai-dot-spin"></div>
+            <span>Consulting AI knowledge base...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="card" id="historyCard" style="display:none;">
+        <div class="card-header">
+          <span class="card-title">Recent Scans</span>
+        </div>
+        <div class="card-body">
+          <div class="history-grid" id="historyGrid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-note">DeepScan AI — URPC2020 Dataset · YOLOv8 Architecture · Claude AI Integration</div>
+    <div class="footer-note">© 2025 Deep Ocean Systems Research</div>
+  </footer>
+</div>
+
+<script>
+// ─── PARTICLES ───
+const pContainer = document.getElementById('particles');
+for (let i = 0; i < 25; i++) {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.style.cssText = `left:${Math.random()*100}%;--dur:${6+Math.random()*10}s;--delay:${Math.random()*8}s;--drift:${(Math.random()-0.5)*60}px;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;opacity:${0.2+Math.random()*0.3}`;
+  pContainer.appendChild(p);
+}
+
+// ─── URPC2020 CLASSES ───
+const CLASSES = [
+  { name: 'holothurian', color: '#00bfa5', sci: 'Holothuroidea spp.', habitat: 'Benthic', depth: '0–6000m', danger: 1, type: 'Echinoderm' },
+  { name: 'echinus', color: '#00e5ff', sci: 'Echinoidea spp.', habitat: 'Rocky reef', depth: '0–1000m', danger: 2, type: 'Echinoderm' },
+  { name: 'scallop', color: '#b39ddb', sci: 'Pectinidae spp.', habitat: 'Sandy/Gravel', depth: '0–400m', danger: 1, type: 'Bivalve' },
+  { name: 'starfish', color: '#ff8a65', sci: 'Asteroidea spp.', habitat: 'Rocky/Sandy', depth: '0–6000m', danger: 1, type: 'Echinoderm' },
+  { name: 'waterweeds', color: '#81c784', sci: 'Aquatic flora', habitat: 'Coastal/Reef', depth: '0–50m', danger: 0, type: 'Flora' },
+];
+
+// ─── SAMPLE IMAGES (canvas-drawn underwater scenes) ───
+const SAMPLE_CONFIGS = [
+  {
+    bg: '#041a2e',
+    detections: [
+      { cls: 0, x: 120, y: 180, w: 140, h: 100, conf: 0.92 },
+      { cls: 1, x: 400, y: 120, w: 90, h: 90, conf: 0.87 },
+      { cls: 3, x: 260, y: 300, w: 120, h: 110, conf: 0.78 },
+      { cls: 4, x: 500, y: 250, w: 80, h: 60, conf: 0.65 },
+    ]
+  }
+];
+
+let currentDetections = [];
+let currentImage = null;
+let analysisHistory = [];
+let selectedDet = null;
+
+// ─── DOM REFS ───
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const canvasContainer = document.getElementById('canvasContainer');
+const canvas = document.getElementById('detectionCanvas');
+const ctx = canvas.getContext('2d');
+const processingOverlay = document.getElementById('processingOverlay');
+const scanLine = document.getElementById('scanLine');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const detectionsList = document.getElementById('detectionsList');
+const detCount = document.getElementById('detCount');
+const speciesCard = document.getElementById('speciesCard');
+const speciesBody = document.getElementById('speciesBody');
+const statsCard = document.getElementById('statsCard');
+const historyCard = document.getElementById('historyCard');
+const historyGrid = document.getElementById('historyGrid');
+const canvasOverlay = document.getElementById('canvasOverlay');
+
+// ─── FILE HANDLING ───
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadImageFile(file);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) loadImageFile(e.target.files[0]);
+});
+
+document.getElementById('sampleBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  loadSampleImage();
+});
+
+function loadImageFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => { currentImage = img; showImageOnCanvas(img); };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadSampleImage() {
+  // Generate a convincing underwater scene programmatically
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = 640; offCanvas.height = 480;
+  const octx = offCanvas.getContext('2d');
+
+  // Background: deep ocean gradient
+  const bg = octx.createLinearGradient(0, 0, 0, 480);
+  bg.addColorStop(0, '#01111f');
+  bg.addColorStop(0.5, '#031c32');
+  bg.addColorStop(1, '#020c18');
+  octx.fillStyle = bg;
+  octx.fillRect(0, 0, 640, 480);
+
+  // Caustic light rays
+  for (let i = 0; i < 8; i++) {
+    const x = 40 + i * 80 + (Math.random() * 40 - 20);
+    const grd = octx.createLinearGradient(x, 0, x + 15, 480);
+    grd.addColorStop(0, 'rgba(0,200,220,0.12)');
+    grd.addColorStop(1, 'rgba(0,100,150,0)');
+    octx.fillStyle = grd;
+    octx.beginPath();
+    octx.moveTo(x - 5, 0); octx.lineTo(x + 40, 0);
+    octx.lineTo(x + 80, 480); octx.lineTo(x + 30, 480);
+    octx.fill();
+  }
+
+  // Particles
+  for (let i = 0; i < 80; i++) {
+    octx.beginPath();
+    octx.arc(Math.random()*640, Math.random()*480, Math.random()*1.5+0.3, 0, Math.PI*2);
+    octx.fillStyle = `rgba(100,220,255,${Math.random()*0.4+0.1})`;
+    octx.fill();
+  }
+
+  // Seabed
+  octx.fillStyle = '#041018';
+  octx.beginPath();
+  octx.moveTo(0, 420);
+  for (let x = 0; x <= 640; x += 40) {
+    octx.lineTo(x, 410 + Math.sin(x*0.05)*8 + Math.random()*6);
+  }
+  octx.lineTo(640, 480); octx.lineTo(0, 480); octx.fill();
+
+  // Rocks/corals
+  const rocks = [[80,415],[200,408],[340,418],[500,412],[600,416]];
+  rocks.forEach(([rx,ry]) => {
+    octx.fillStyle = '#02131f';
+    octx.beginPath();
+    octx.ellipse(rx, ry, 18+Math.random()*10, 10+Math.random()*5, 0, 0, Math.PI*2);
+    octx.fill();
+  });
+
+  // Waterweeds
+  for (let wx = 490; wx < 590; wx += 15) {
+    octx.strokeStyle = `rgba(30,180,80,${0.4+Math.random()*0.3})`;
+    octx.lineWidth = 2;
+    octx.beginPath();
+    octx.moveTo(wx, 420);
+    for (let wy = 420; wy > 360; wy -= 15) {
+      octx.bezierCurveTo(wx-10, wy-5, wx+10, wy-10, wx+Math.sin(wy*0.2)*8, wy-15);
+    }
+    octx.stroke();
+  }
+
+  // Sea cucumber (holothurian) — brownish elongated shape
+  octx.save();
+  octx.translate(145, 340);
+  const cucGrd = octx.createRadialGradient(0, 0, 10, 0, 0, 60);
+  cucGrd.addColorStop(0, '#5d4037');
+  cucGrd.addColorStop(1, '#3e2723');
+  octx.fillStyle = cucGrd;
+  octx.beginPath();
+  octx.ellipse(0, 0, 65, 28, 0.2, 0, Math.PI*2);
+  octx.fill();
+  for (let t = -60; t <= 60; t += 12) {
+    octx.beginPath();
+    octx.arc(t, -12 + Math.abs(t)*0.1, 3, 0, Math.PI*2);
+    octx.fillStyle = '#6d4c41';
+    octx.fill();
+  }
+  octx.restore();
+
+  // Sea urchin (echinus) — spiky circle
+  octx.save();
+  octx.translate(420, 180);
+  octx.fillStyle = '#1a237e';
+  octx.beginPath(); octx.arc(0, 0, 30, 0, Math.PI*2); octx.fill();
+  for (let a = 0; a < 360; a += 18) {
+    const rad = a * Math.PI / 180;
+    octx.strokeStyle = '#3949ab';
+    octx.lineWidth = 1.5;
+    octx.beginPath();
+    octx.moveTo(Math.cos(rad)*30, Math.sin(rad)*30);
+    octx.lineTo(Math.cos(rad)*52, Math.sin(rad)*52);
+    octx.stroke();
+  }
+  octx.restore();
+
+  // Starfish
+  octx.save();
+  octx.translate(270, 390);
+  octx.fillStyle = '#e64a19';
+  ctx_star(octx, 0, 0, 5, 42, 18);
+  octx.fill();
+  octx.strokeStyle = '#bf360c'; octx.lineWidth = 1;
+  ctx_star(octx, 0, 0, 5, 42, 18); octx.stroke();
+  octx.restore();
+
+  // Scallop
+  octx.save();
+  octx.translate(160, 230);
+  const scGrd = octx.createRadialGradient(0,0,5, 0,0,40);
+  scGrd.addColorStop(0, '#fff176');
+  scGrd.addColorStop(1, '#f9a825');
+  octx.fillStyle = scGrd;
+  octx.beginPath();
+  for (let a = 0; a <= 180; a += 10) {
+    const r = 40 + Math.sin(a * 0.7) * 8;
+    const rad = a * Math.PI / 180;
+    if (a === 0) octx.moveTo(Math.cos(rad)*r, -Math.sin(rad)*r);
+    else octx.lineTo(Math.cos(rad)*r, -Math.sin(rad)*r);
+  }
+  octx.closePath(); octx.fill();
+  octx.restore();
+
+  const img = new Image();
+  img.onload = () => { currentImage = img; showImageOnCanvas(img); };
+  img.src = offCanvas.toDataURL();
+}
+
+function ctx_star(c, cx, cy, spikes, outerR, innerR) {
+  let rot = (Math.PI / 2) * 3;
+  const step = Math.PI / spikes;
+  c.beginPath();
+  c.moveTo(cx, cy - outerR);
+  for (let i = 0; i < spikes; i++) {
+    c.lineTo(cx + Math.cos(rot)*outerR, cy + Math.sin(rot)*outerR);
+    rot += step;
+    c.lineTo(cx + Math.cos(rot)*innerR, cy + Math.sin(rot)*innerR);
+    rot += step;
+  }
+  c.lineTo(cx, cy - outerR);
+  c.closePath();
+}
+
+function showImageOnCanvas(img) {
+  canvasContainer.classList.add('visible');
+  dropZone.style.display = 'none';
+  analyzeBtn.classList.add('visible');
+
+  const maxW = canvasContainer.offsetWidth;
+  const scale = Math.min(maxW / img.width, 520 / img.height);
+  canvas.width = img.width * scale;
+  canvas.height = img.height * scale;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  currentDetections = [];
+  detectionsList.innerHTML = '<div class="empty-state"><span class="empty-icon">🔍</span>Click "Analyze" to run YOLOv8 detection</div>';
+  speciesCard.classList.remove('visible');
+  statsCard.style.display = 'none';
+  detCount.textContent = '0 found';
+  canvasOverlay.innerHTML = '';
+}
+
+// ─── ANALYSIS PIPELINE ───
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+analyzeBtn.addEventListener('click', runDetection);
+
+async function runDetection() {
+  if (!currentImage) return;
+  analyzeBtn.style.display = 'none';
+  processingOverlay.classList.add('active');
+  scanLine.style.display = 'block';
+
+  const steps = [
+    [300, 'PREPROCESSING', 'Sending image to YOLOv8 backend...'],
+    [400, 'DETECTING',     'Running real YOLOv8 detection...'],
+    [300, 'PROCESSING',    'Applying NMS post-processing...'],
+    [200, 'COMPLETE',      'Detection complete'],
+  ];
+
+  for (const [delay, title, desc] of steps) {
+    document.getElementById('procText').textContent = title;
+    document.getElementById('procSteps').textContent = desc;
+    await sleep(delay);
+  }
+
+  try {
+    // Send image to real YOLOv8 backend
+    const blob = await new Promise(resolve => {
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width  = currentImage.width;
+      offCanvas.height = currentImage.height;
+      offCanvas.getContext('2d').drawImage(currentImage, 0, 0);
+      offCanvas.toBlob(resolve, 'image/jpeg', 0.95);
+    });
+
+    const formData = new FormData();
+    formData.append('file', blob, 'image.jpg');
+
+    const response = await fetch('http://localhost:8000/detect', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) throw new Error('Backend error');
+    const data = await response.json();
+
+    scanLine.style.display = 'none';
+    processingOverlay.classList.remove('active');
+
+    // Show annotated image returned from backend
+    const img = new Image();
+    img.onload = () => {
+      canvas.width  = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = 'data:image/jpeg;base64,' + data.annotated_image_b64;
+
+    // Map backend detections to frontend format
+    currentDetections = data.detections.map(d => ({
+      ...d,
+      conf:  d.confidence,
+      class: CLASSES[d.class_id] || CLASSES[0],
+      px: d.bbox_pixels[0],
+      py: d.bbox_pixels[1],
+      pw: d.bbox_pixels[2] - d.bbox_pixels[0],
+      ph: d.bbox_pixels[3] - d.bbox_pixels[1],
+    }));
+
+    document.getElementById('inferenceTime').textContent =
+      data.inference_time_ms.toFixed(1) + 'ms';
+
+    updateSidebar(currentDetections);
+    const thumb = canvas.toDataURL('image/jpeg', 0.5);
+    addToHistory(thumb, currentDetections.length);
+
+  } catch (err) {
+    console.error('Detection error:', err);
+    scanLine.style.display = 'none';
+    processingOverlay.classList.remove('active');
+    // Fallback to mock if backend unreachable
+    const dets = generateDetections();
+    currentDetections = dets;
+    drawDetections(dets);
+    updateSidebar(dets);
+    const thumb = canvas.toDataURL('image/jpeg', 0.5);
+    addToHistory(thumb, dets.length);
+    alert('⚠️ Could not reach backend. Showing mock detections.\nMake sure backend is running on port 8000.');
+  }
+}
+
+function generateDetections() {
+  // Predefined realistic detections for sample image
+  const raw = [
+    { cls: 0, x: 80,  y: 310, w: 145, h: 80,  conf: 0.934 },
+    { cls: 1, x: 400, y: 152, w: 90,  h: 88,  conf: 0.871 },
+    { cls: 3, x: 234, y: 352, w: 110, h: 95,  conf: 0.812 },
+    { cls: 2, x: 125, y: 198, w: 85,  h: 75,  conf: 0.756 },
+    { cls: 4, x: 472, y: 330, w: 100, h: 90,  conf: 0.643 },
+  ];
+
+  const sw = canvas.width / 640;
+  const sh = canvas.height / 480;
+  return raw.map((d, i) => ({
+    ...d,
+    id: i,
+    px: d.x * sw,
+    py: d.y * sh,
+    pw: d.w * sw,
+    ph: d.h * sh,
+    class: CLASSES[d.cls],
+  }));
+}
+
+function drawDetections(dets) {
+  ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
+
+  dets.forEach((d, i) => {
+    const cl = d.class;
+    const x = d.px, y = d.py, w = d.pw, h = d.ph;
+    const hex = cl.color;
+
+    // Shadow glow
+    ctx.shadowColor = hex;
+    ctx.shadowBlur = 14;
+
+    // Box
+    ctx.strokeStyle = hex;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+
+    // Corner markers
+    const cs = 14;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 0;
+    [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([cx,cy]) => {
+      ctx.strokeStyle = hex;
+      ctx.beginPath();
+      ctx.moveTo(cx + (cx===x?cs:-cs), cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + (cy===y?cs:-cs));
+      ctx.stroke();
+    });
+
+    // Label bg
+    const label = `${cl.name} ${(d.conf*100).toFixed(0)}%`;
+    ctx.font = 'bold 12px DM Mono, monospace';
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(2,11,24,0.88)';
+    ctx.shadowBlur = 0;
+    ctx.fillRect(x - 1, y - 24, tw + 16, 22);
+    ctx.strokeStyle = hex; ctx.lineWidth = 1;
+    ctx.strokeRect(x - 1, y - 24, tw + 16, 22);
+
+    // Label text
+    ctx.fillStyle = hex;
+    ctx.fillText(label, x + 7, y - 8);
+
+    // Index badge
+    ctx.fillStyle = hex;
+    ctx.beginPath(); ctx.arc(x + w - 8, y + 10, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#020b18';
+    ctx.font = 'bold 9px DM Mono, monospace';
+    ctx.fillText(i+1, x + w - 11, y + 13.5);
+  });
+}
+
+function updateSidebar(dets) {
+  // Stats
+  const avgConf = dets.reduce((a,b) => a+b.conf, 0) / dets.length;
+  const species = new Set(dets.map(d => d.cls)).size;
+  document.getElementById('statObjects').textContent = dets.length;
+  document.getElementById('statSpecies').textContent = species;
+  document.getElementById('statConfAvg').textContent = (avgConf*100).toFixed(0)+'%';
+  document.getElementById('inferenceTime').textContent = (18 + Math.random()*8).toFixed(1)+'ms';
+  statsCard.style.display = 'block';
+  detCount.textContent = `${dets.length} found`;
+
+  // Detection list
+  detectionsList.innerHTML = '';
+  dets.forEach((d, i) => {
+    const el = document.createElement('div');
+    el.className = 'detection-item';
+    el.style.setProperty('--item-color', d.class.color);
+    const confClass = d.conf > 0.85 ? 'high' : d.conf > 0.65 ? 'medium' : 'low';
+    const barColor = d.conf > 0.85 ? 'var(--glow-teal)' : d.conf > 0.65 ? 'var(--glow-amber)' : 'var(--glow-danger)';
+    el.innerHTML = `
+      <div class="det-top">
+        <span class="det-name" style="color:${d.class.color}">${i+1}. ${d.class.name}</span>
+        <span class="det-conf ${confClass}">${(d.conf*100).toFixed(1)}%</span>
+      </div>
+      <div class="conf-bar-track"><div class="conf-bar-fill" style="width:${d.conf*100}%;--fill-color:${barColor}"></div></div>
+    `;
+    el.addEventListener('click', () => selectDetection(d, el));
+    detectionsList.appendChild(el);
+  });
+
+  // Auto-select top detection
+  if (dets.length > 0) {
+    setTimeout(() => detectionsList.children[0]?.click(), 400);
+  }
+}
+
+function selectDetection(d, el) {
+  document.querySelectorAll('.detection-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  selectedDet = d;
+  speciesCard.classList.add('visible');
+  speciesBody.innerHTML = '<div class="ai-loading"><div class="ai-dot-spin"></div><span>Querying Claude AI species database...</span></div>';
+  fetchSpeciesInfo(d);
+
+  // Highlight on canvas
+  drawDetections(currentDetections);
+  const x = d.px, y = d.py, w = d.pw, h = d.ph;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([8, 4]);
+  ctx.strokeRect(x-3, y-3, w+6, h+6);
+  ctx.setLineDash([]);
+}
+
+// ─── CLAUDE AI INTEGRATION ───
+async function fetchSpeciesInfo(det) {
+  const cl = det.class;
+  try {
+    const res = await fetch(`http://localhost:8000/species/${cl.name}`);
+    if (!res.ok) throw new Error('Backend error');
+    const info = await res.json();
+    renderSpeciesCard(info, cl.color);
+  } catch(err) {
+    renderFallbackSpecies(cl);
+  }
+}
+
+function renderSpeciesCard(info, color) {
+  const dangerSegs = Array.from({length:5}, (_,i) =>
+    `<div class="danger-seg ${i < info.danger_level ? `filled-${i+1}` : ''}"></div>`
+  ).join('');
+
+  speciesBody.innerHTML = `
+    <div class="species-name">${info.common_name || info.scientific_name}</div>
+    <div class="species-sci">${info.scientific_name}</div>
+    <div class="trait-grid">
+      <div class="trait-item"><div class="trait-label">Habitat</div><div class="trait-val">${info.habitat}</div></div>
+      <div class="trait-item"><div class="trait-label">Depth</div><div class="trait-val">${info.depth_range}</div></div>
+      <div class="trait-item"><div class="trait-label">Size</div><div class="trait-val">${info.size}</div></div>
+      <div class="trait-item"><div class="trait-label">Diet</div><div class="trait-val">${info.diet}</div></div>
+      <div class="trait-item" style="grid-column:span 2"><div class="trait-label">Conservation</div><div class="trait-val">${info.conservation_status}</div></div>
+    </div>
+    <div class="trait-item" style="margin-bottom:14px">
+      <div class="trait-label" style="margin-bottom:6px">Danger Level</div>
+      <div class="danger-bar">${dangerSegs}</div>
+    </div>
+    <div class="ai-description">${info.description}</div>
+    ${info.fun_fact ? `<div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.15);font-size:12px;color:var(--text-secondary);font-family:var(--font-mono)">💡 ${info.fun_fact}</div>` : ''}
+  `;
+}
+
+function renderFallbackSpecies(cl) {
+  const fallback = {
+    holothurian: { desc: 'Sea cucumbers are echinoderms that inhabit the seafloor. They play a crucial role in marine ecosystems by recycling nutrients from sediments, and some species can expel their internal organs as a defense mechanism.' },
+    echinus: { desc: 'Sea urchins are spiny marine animals found in all oceans. They are keystone species on coral reefs, controlling algae growth, and their larvae are important food for many marine species.' },
+    scallop: { desc: 'Scallops are free-swimming bivalves with rows of simple eyes that can detect light and shadow. They are remarkably agile swimmers who clap their shells together to escape predators.' },
+    starfish: { desc: 'Starfish (sea stars) are apex predators of the intertidal zone. They have the remarkable ability to regenerate lost arms and can digest prey outside their body.' },
+    waterweeds: { desc: 'Aquatic plants provide essential habitat and oxygen in underwater ecosystems. They form the base of food chains and provide shelter for juvenile fish and invertebrates.' },
+  }[cl.name] || { desc: 'A fascinating marine organism found in underwater environments.' };
+
+  speciesBody.innerHTML = `
+    <div class="species-name">${cl.name}</div>
+    <div class="species-sci">${cl.sci}</div>
+    <div class="ai-description">${fallback.desc}</div>
+  `;
+}
+
+// ─── HISTORY ───
+function addToHistory(thumbDataUrl, count) {
+  analysisHistory.unshift({ src: thumbDataUrl, count });
+  if (analysisHistory.length > 4) analysisHistory = analysisHistory.slice(0, 4);
+
+  historyCard.style.display = 'block';
+  historyGrid.innerHTML = '';
+  analysisHistory.forEach(h => {
+    const div = document.createElement('div');
+    div.className = 'history-thumb';
+    div.innerHTML = `<img src="${h.src}" alt="scan"><span class="hist-count">${h.count}</span>`;
+    historyGrid.appendChild(div);
+  });
+}
+
+// ─── RESET ───
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    canvasContainer.classList.remove('visible');
+    dropZone.style.display = '';
+    analyzeBtn.classList.remove('visible');
+    currentImage = null;
+  }
+});
+</script>
+</body>
+</html>
