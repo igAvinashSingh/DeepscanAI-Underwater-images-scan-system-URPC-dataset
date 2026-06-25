@@ -1,6 +1,6 @@
 # 🌊 DeepScan AI — Underwater Object Detection System
 
-**Real-time underwater species detection using YOLOv8 + Claude AI**  
+**Real-time underwater species detection using YOLOv8 + Gemini AI**  
 Dataset: URPC2020 (National Underwater Robotics Professional Competition 2020)
 
 ---
@@ -10,7 +10,7 @@ Dataset: URPC2020 (National Underwater Robotics Professional Competition 2020)
 DeepScan AI is a full-stack underwater object detection system that:
 1. **Detects** 5 underwater species using YOLOv8
 2. **Annotates** images with bounding boxes and confidence scores
-3. **Explains** detected species using Claude AI (habitat, behavior, ecology)
+3. **Explains** detected species using Gemini AI (habitat, behavior, ecology)
 
 ### Detected Classes (URPC2020)
 | ID | Class | Description |
@@ -44,7 +44,7 @@ underwater_detection/
 ### Option A: Frontend Only (No Backend Needed)
 Just open `index.html` in your browser. It includes:
 - Simulated YOLOv8 detections
-- Real Claude AI species descriptions (needs API key in browser)
+- Real Gemini AI species descriptions (needs API key in browser)
 - Full interactive UI
 
 ### Option B: Full Stack with Real YOLOv8
@@ -203,7 +203,7 @@ PORT=8000                        # Server port (default: 8000)
 |-------|-----------|
 | Detection | YOLOv8 (Ultralytics) |
 | Backend | FastAPI + Python |
-| AI Descriptions | Claude claude-sonnet-4-20250514 (Anthropic) |
+| AI Descriptions | Google Gemini |
 | Frontend | Vanilla HTML/CSS/JS |
 | Image Processing | OpenCV + Pillow |
 | Deployment | Docker / Uvicorn |
